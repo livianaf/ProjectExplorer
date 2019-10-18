@@ -1,0 +1,1 @@
+Import-Module D:\source\ProjectExplorer\bin\Debug\ProjectExplorer.psm1
