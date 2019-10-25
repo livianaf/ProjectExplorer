@@ -21,7 +21,7 @@ namespace IseAddons {
         private cProjects mProjects = new cProjects();
         private ObjectModelRoot hostObject;
         private bool PrjSelected => LastProjectSelected != null;
-        private Stack<Tuple<string, int[]>> BackList { get; } = new Stack<Tuple<string, int[]>>();
+        private Stack<Tuple<string, int, int>> BackList { get; } = new Stack<Tuple<string, int, int>>();
         private int LastProjectIndexSelected { set; get; } = -1;
         private string LastProjectSelected { set; get; } = null;
         //_____________________________________________________________________________________________________________________________________________________________
@@ -136,17 +136,22 @@ namespace IseAddons {
             if (mProjects.Project.Scripts.Count != cTvFunctions.Items.Count) SaveProject();
 
             string fullPath = hostObject.CurrentPowerShellTab.Files.SelectedFile?.FullPath;
+            if (string.IsNullOrWhiteSpace(fullPath)) return;
             string name = Path.GetFileName(fullPath);
+            string folderName = Path.GetDirectoryName(fullPath);
             foreach (TreeViewItem i in cTvFunctions.Items) {
                 if (i.Header.ToString() == name) {
                     //necesario para que BringIntoView coloque el TvItem al principio de la lista. No vale con llamar a BringIntoView del último hijo antes del padre.
                     Rect rect = new Rect(-1000, 0, cTvFunctions.ActualWidth + 1000, cTvFunctions.ActualHeight);
-                    if (i.IsExpanded == false) hostObject.CurrentPowerShellTab.Invoke($"CD {Path.GetDirectoryName(fullPath)}");
+                    if (i.IsExpanded == false)
+                        try { hostObject.CurrentPowerShellTab.Invoke($"CD {folderName}"); }
+                        catch (Exception ex) { LogHelper.AddException(ex, "CurrentPowerShellTab_PropertyChanged", $"Executing CD {folderName}"); }
                     i.IsExpanded = true;
                     i.IsSelected = true;
                     i.BringIntoView(rect);
+                    break;// si no hay else se puede salir directamente.
                     }
-                //else i.IsExpanded = false;
+                //else i.IsExpanded = false; // colapsa todo el árbol menos la rama que interesa.
                 }
             }
         //_____________________________________________________________________________________________________________________________________________________________
@@ -311,10 +316,10 @@ namespace IseAddons {
         public void GoBack() {
             LogHelper.Add("GoBack");
             if (BackList.Count == 0) return;
-            Tuple<string, int[]> pos = BackList.Pop();
+            Tuple<string, int, int> pos = BackList.Pop();
             try {
                 hostObject.CurrentPowerShellTab.Files.SetSelectedFile(hostObject.CurrentPowerShellTab.Files.Where(file => file.FullPath.iEquals(pos.Item1)).FirstOrDefault());
-                hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor.SetCaretPosition(pos.Item2[0], pos.Item2[1]);
+                hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor.SetCaretPosition(pos.Item2, pos.Item3);
                 }
             catch (Exception ex) { LogHelper.AddException(ex, "GetReferences", null); }
             }
@@ -324,7 +329,7 @@ namespace IseAddons {
             ISEEditor editor = hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor;
             string caretLineText = editor.CaretLineText;
             string currentFile = hostObject.CurrentPowerShellTab.Files.SelectedFile.FullPath;
-            Tuple<string, int[]> pos = new Tuple<string, int[]>(currentFile, new int[] { editor.CaretLine, editor.CaretColumn });
+            Tuple<string, int, int> pos = new Tuple<string, int, int>(currentFile, editor.CaretLine, editor.CaretColumn);
             Collection<PSParseError> errors = new Collection<PSParseError>();
             List<PSToken> list = PSParser.Tokenize(caretLineText, out errors).Where(t => t.Type == PSTokenType.Command && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
             if (list.Count == 0) list = PSParser.Tokenize(caretLineText, out errors).Where(t => t.Type == PSTokenType.CommandParameter && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
@@ -411,7 +416,7 @@ namespace IseAddons {
                 ISEEditor editor = hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor;
                 string currentFile = hostObject.CurrentPowerShellTab.Files.SelectedFile.FullPath;
                 string caretLineText = editor.CaretLineText;
-                Tuple<string, int[]> pos = new Tuple<string, int[]>(currentFile, new int[] { editor.CaretLine, editor.CaretColumn });
+                Tuple<string, int, int> pos = new Tuple<string, int, int>(currentFile, editor.CaretLine, editor.CaretColumn);
                 Collection<PSParseError> errors = new Collection<PSParseError>();
                 List<PSToken> list = PSParser.Tokenize(caretLineText, out errors).Where(t => t.Type == PSTokenType.Command && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
 
