@@ -23,7 +23,7 @@
                 <TextBlock  Margin="5"  FontWeight="Bold">Projects:</TextBlock>
                 <TextBlock Name="lSelected" Margin="0,5" Foreground="Gray" FontWeight="Bold"></TextBlock>
             </StackPanel>
-            <ListBox Grid.Row="1" Margin="5" Grid.ColumnSpan="2"  Name="cLstPrj" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" MinHeight="60" MouseDoubleClick="cLstPrj_MouseDoubleClick">
+            <ListBox Grid.Row="1" Margin="5" Grid.ColumnSpan="2"  Name="cLstPrj" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" MinHeight="60" MouseDoubleClick="cLstPrj_MouseDoubleClick" ScrollViewer.HorizontalScrollBarVisibility="Hidden">
                 <ListBox.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Rename" Click="mProjectRename_Click"/>
@@ -45,7 +45,7 @@
                 <TextBlock Grid.Row="0" Margin="4" FontWeight="Bold">Files / Functions:</TextBlock>
                 <TextBlock Name="lOpened" Margin="0,5" Foreground="Gray" FontWeight="Bold"></TextBlock>
             </StackPanel>
-            <TreeView Grid.Row="1"  MouseDoubleClick="cTvFunctions_MouseDoubleClick" x:Name="cTvFunctions" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" MinHeight="60"/>
+            <TreeView Grid.Row="1"  MouseDoubleClick="cTvFunctions_MouseDoubleClick" x:Name="cTvFunctions" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" MinHeight="60" ScrollViewer.HorizontalScrollBarVisibility="Hidden"/>
             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
                 <CheckBox Name="cWriteLog" Click="cWriteLog_Click" Content="Write log           "  IsChecked="False" VerticalAlignment="Center" HorizontalAlignment="Left"/>
                 <Button Click="bUpdate_Click" x:Name="bUpdate" Content="Update" Margin="4" ToolTip="Updates the functions in the treeview" HorizontalAlignment="Right" VerticalAlignment="Center" Width="56" Height="20"/>

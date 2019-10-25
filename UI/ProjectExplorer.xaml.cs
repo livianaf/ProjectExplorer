@@ -21,7 +21,7 @@ namespace IseAddons {
         private cProjects mProjects = new cProjects();
         private ObjectModelRoot hostObject;
         private bool PrjSelected => LastProjectSelected != null;
-        private Stack<int[]> BackList { get; } = new Stack<int[]>();
+        private Stack<Tuple<string, int[]>> BackList { get; } = new Stack<Tuple<string, int[]>>();
         private int LastProjectIndexSelected { set; get; } = -1;
         private string LastProjectSelected { set; get; } = null;
         //_____________________________________________________________________________________________________________________________________________________________
@@ -135,11 +135,13 @@ namespace IseAddons {
 
             if (mProjects.Project.Scripts.Count != cTvFunctions.Items.Count) SaveProject();
 
-            string name = Path.GetFileName(hostObject.CurrentPowerShellTab.Files.SelectedFile?.FullPath);
+            string fullPath = hostObject.CurrentPowerShellTab.Files.SelectedFile?.FullPath;
+            string name = Path.GetFileName(fullPath);
             foreach (TreeViewItem i in cTvFunctions.Items) {
                 if (i.Header.ToString() == name) {
                     //necesario para que BringIntoView coloque el TvItem al principio de la lista. No vale con llamar a BringIntoView del último hijo antes del padre.
                     Rect rect = new Rect(-1000, 0, cTvFunctions.ActualWidth + 1000, cTvFunctions.ActualHeight);
+                    if (i.IsExpanded == false) hostObject.CurrentPowerShellTab.Invoke($"CD {Path.GetDirectoryName(fullPath)}");
                     i.IsExpanded = true;
                     i.IsSelected = true;
                     i.BringIntoView(rect);
@@ -309,15 +311,20 @@ namespace IseAddons {
         public void GoBack() {
             LogHelper.Add("GoBack");
             if (BackList.Count == 0) return;
-            int[] pos = BackList.Pop();
-            hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor.SetCaretPosition(pos[0], pos[1]);
+            Tuple<string, int[]> pos = BackList.Pop();
+            try {
+                hostObject.CurrentPowerShellTab.Files.SetSelectedFile(hostObject.CurrentPowerShellTab.Files.Where(file => file.FullPath.iEquals(pos.Item1)).FirstOrDefault());
+                hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor.SetCaretPosition(pos.Item2[0], pos.Item2[1]);
+                }
+            catch (Exception ex) { LogHelper.AddException(ex, "GetReferences", null); }
             }
         //_____________________________________________________________________________________________________________________________________________________________
         public void GetReferences() {
             LogHelper.Add("GetReferences");
             ISEEditor editor = hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor;
             string caretLineText = editor.CaretLineText;
-            int[] pos = new int[] { editor.CaretLine, editor.CaretColumn };
+            string currentFile = hostObject.CurrentPowerShellTab.Files.SelectedFile.FullPath;
+            Tuple<string, int[]> pos = new Tuple<string, int[]>(currentFile, new int[] { editor.CaretLine, editor.CaretColumn });
             Collection<PSParseError> errors = new Collection<PSParseError>();
             List<PSToken> list = PSParser.Tokenize(caretLineText, out errors).Where(t => t.Type == PSTokenType.Command && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
             if (list.Count == 0) list = PSParser.Tokenize(caretLineText, out errors).Where(t => t.Type == PSTokenType.CommandParameter && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
@@ -340,7 +347,7 @@ namespace IseAddons {
             if (lst.Count == 0) return;
             using (frmReferences f = new frmReferences()) {
                 f.Locations = lst;
-                f.SelectDefaultLocation(Path.GetFileName(hostObject.CurrentPowerShellTab.Files.SelectedFile.FullPath), editor.CaretLine);
+                f.SelectDefaultLocation(Path.GetFileName(currentFile), editor.CaretLine);
                 f.Command = title;
                 f.ShowDialog(new WindowWrapper(WindowWrapper.GetSafeHandle()));
                 if (!f.ReferenceSelected) return;
@@ -349,6 +356,7 @@ namespace IseAddons {
                     hostObject.CurrentPowerShellTab.Files.SetSelectedFile(hostObject.CurrentPowerShellTab.Files.Where(file => Path.GetFileName(file.FullPath).iEquals(l.fileName)).FirstOrDefault());
                     hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor.SetCaretPosition(l.line, l.position);
                     hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor.Select(l.line, l.position, l.line, l.position + l.word.Length);
+                    BackList.Push(pos);
                     }
                 catch (Exception ex) { LogHelper.AddException(ex, "GetReferences", null); }
                 }
@@ -403,7 +411,7 @@ namespace IseAddons {
                 ISEEditor editor = hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor;
                 string currentFile = hostObject.CurrentPowerShellTab.Files.SelectedFile.FullPath;
                 string caretLineText = editor.CaretLineText;
-                int[] pos = new int[] { editor.CaretLine, editor.CaretColumn };
+                Tuple<string, int[]> pos = new Tuple<string, int[]>(currentFile, new int[] { editor.CaretLine, editor.CaretColumn });
                 Collection<PSParseError> errors = new Collection<PSParseError>();
                 List<PSToken> list = PSParser.Tokenize(caretLineText, out errors).Where(t => t.Type == PSTokenType.Command && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
 
@@ -411,10 +419,7 @@ namespace IseAddons {
                 if (function == null) function = mProjects.Project.Functions.GetFunctionByName(list[0].Content);
                 if (function == null) return false;
 
-                ISEFile file = hostObject.CurrentPowerShellTab.Files.SelectedFile;
-
-                if (file == null)
-                    file = hostObject.CurrentPowerShellTab.Files.Where(x => x.FullPath.iEquals(function.FullName)).FirstOrDefault();
+                ISEFile file = hostObject.CurrentPowerShellTab.Files.Where(x => x.FullPath.iEquals(function.FullName)).FirstOrDefault();
 
                 if (file != null) {
                     hostObject.CurrentPowerShellTab.Files.SetSelectedFile(file);
