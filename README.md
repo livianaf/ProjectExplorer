@@ -20,7 +20,7 @@ Key features:
   * F12 key allows you to go straight to the definition of a function or variable where the cursor is currently over.
 - **Find references**
   * F7 key opens a new window with a list of references to that function or variable. This window provides details about the line, function and surrounding code. It also allows to you go to any reference location.
-  - **Go-back**
+- **Go-back**
   * SHIFT+F12 key combination allows you to go back to the last function (reached by F12) or reference (reached by F7).
 
 
