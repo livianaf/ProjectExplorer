@@ -267,7 +267,10 @@ namespace IseAddons {
                 bool isWorkflow = false;
                 bool inclass = false;
                 bool isNewLine = false;
-                int countLevel = 0;
+                int countClassLevel = 0;
+                int countBracketLevel = 0;
+                int countParentLevel = 0;
+                int possibleErrLine = -1;
                 string className = "";
                 mProjects.Project.Functions.RemoveFunctionByFile(file.FullPath);
                 FileTreeViewItem scriptItem = new FileTreeViewItem(file.FullPath);
@@ -278,31 +281,53 @@ namespace IseAddons {
                 LogHelper.Add($"UpdateTreeView->Search tokens");
                 //foreach (PSToken psToken in PSParser.Tokenize(file.Editor.Text, out errors).Where(t => t.Type == PSTokenType.Keyword || t.Type == PSTokenType.CommandArgument || t.Type == PSTokenType.Member || t.Type == PSTokenType.Type || t.Type == PSTokenType.GroupStart || t.Type == PSTokenType.GroupEnd)) {
                 foreach (PSToken psToken in PSParser.Tokenize(file.Editor.Text, out errors)) {
+                    if ("&{@{}".Contains(psToken.Content) && (psToken.Type == PSTokenType.GroupStart || psToken.Type == PSTokenType.GroupEnd)) countBracketLevel += psToken.Type == PSTokenType.GroupStart ? 1 : -1; 
+                    if ("$(@()".Contains(psToken.Content) && (psToken.Type == PSTokenType.GroupStart || psToken.Type == PSTokenType.GroupEnd)) countParentLevel += psToken.Type == PSTokenType.GroupStart ? 1 : -1;
                     if (!inclass && psToken.Type == PSTokenType.Type) continue;
                     if (!inclass && psToken.Type == PSTokenType.NewLine) continue;
-                    if (psToken.Content.iEquals("class") && psToken.Type == PSTokenType.Keyword) inclass = true;
+                    if (psToken.Content.iEquals("class") && psToken.Type == PSTokenType.Keyword) {
+                        if (countBracketLevel + countParentLevel != 0 && possibleErrLine < 0) possibleErrLine = psToken.StartLine;
+                        inclass = true;
+                        }
                     else if (inclass && className == "" && psToken.Type == PSTokenType.Type) className = psToken.Content;
-                    else if (inclass && className != "" && (psToken.Type == PSTokenType.GroupStart || psToken.Type == PSTokenType.GroupEnd)) { countLevel += psToken.Type == PSTokenType.GroupStart ? 1 : -1; if (countLevel == 0) { inclass = false; className = ""; } }
-                    else if (inclass && className != "" && countLevel == 1 && psToken.Type == PSTokenType.CommandArgument) mProjects.Project.Functions.Items.Add(new cFunction(file.FullPath, psToken.Content, psToken.StartLine, psToken.StartColumn, className));
-                    else if (inclass && className != "" && countLevel == 1 && psToken.Type == PSTokenType.NewLine) isNewLine = true;
-                    else if (inclass && className != "" && countLevel == 1 && psToken.Type == PSTokenType.Variable && isNewLine) { mProjects.Project.Functions.Items.Add(new cFunction(file.FullPath, psToken.Content, psToken.StartLine, psToken.StartColumn+1, className, isPrpty: true)); isNewLine = false; }
+                    else if (inclass && className != "" && "{}".Contains(psToken.Content) && (psToken.Type == PSTokenType.GroupStart || psToken.Type == PSTokenType.GroupEnd)) { countClassLevel += psToken.Type == PSTokenType.GroupStart ? 1 : -1; if (countClassLevel == 0) { inclass = false; className = ""; } }
+                    else if (inclass && className != "" && countClassLevel == 1 && psToken.Type == PSTokenType.CommandArgument) {
+                        if (countBracketLevel != 1 && countParentLevel != 0 && possibleErrLine < 0) possibleErrLine = psToken.StartLine;
+                        mProjects.Project.Functions.Items.Add(new cFunction(file.FullPath, psToken.Content, psToken.StartLine, psToken.StartColumn, className));
+                        }
+                    else if (inclass && className != "" && countClassLevel == 1 && psToken.Type == PSTokenType.NewLine) isNewLine = true;
+                    else if (inclass && className != "" && countClassLevel == 1 && psToken.Type == PSTokenType.Variable && isNewLine) {
+                        if (countBracketLevel != 1 && countParentLevel != 0 && possibleErrLine < 0) possibleErrLine = psToken.StartLine;
+                        mProjects.Project.Functions.Items.Add(new cFunction(file.FullPath, psToken.Content, psToken.StartLine, psToken.StartColumn + 1, className, isPrpty: true)); isNewLine = false;
+                        }
                     else if (psToken.Type == PSTokenType.Keyword && psToken.Content.iEquals("function")) isFunction = true;
                     else if (psToken.Type == PSTokenType.Keyword && psToken.Content.iEquals("configuration")) isConfiguration = true;
                     else if (psToken.Type == PSTokenType.Keyword && psToken.Content.iEquals("workflow")) isWorkflow = true;
                     else if (isFunction && psToken.Type == PSTokenType.CommandArgument) {
+                        if (countBracketLevel + countParentLevel != 0 && possibleErrLine < 0) possibleErrLine = psToken.StartLine;
                         mProjects.Project.Functions.Items.Add(new cFunction(file.FullPath, psToken.Content, psToken.StartLine, psToken.StartColumn));
                         isFunction = false;
                         }
                     else if (isConfiguration && psToken.Type == PSTokenType.CommandArgument) {
+                        if (countBracketLevel + countParentLevel != 0 && possibleErrLine < 0) possibleErrLine = psToken.StartLine;
                         mProjects.Project.Functions.Items.Add(new cFunction(file.FullPath, psToken.Content, psToken.StartLine, psToken.StartColumn, isCfg: true));
                         isConfiguration = false;
                         }
                     else if (isWorkflow && psToken.Type == PSTokenType.CommandArgument) {
+                        if (countBracketLevel + countParentLevel != 0 && possibleErrLine < 0) possibleErrLine = psToken.StartLine;
                         mProjects.Project.Functions.Items.Add(new cFunction(file.FullPath, psToken.Content, psToken.StartLine, psToken.StartColumn, isWF: true));
                         isWorkflow = false;
                         }
                     }
-
+                if(countBracketLevel != 0 || countParentLevel != 0) {
+                    LogHelper.Add($"{file.FullPath}: Error matching brackets and or parenthesis");
+                    scriptItem.Header += "  * review matching ";
+                    scriptItem.Header += countBracketLevel != 0 ? "{}" : "";
+                    if(!scriptItem.Header.ToString().EndsWith(" ") && countParentLevel != 0) scriptItem.Header += " and ";
+                    scriptItem.Header += countParentLevel != 0 ? "()" : "";
+                    if (possibleErrLine > 0) scriptItem.Header += $" before line {possibleErrLine}";
+                    scriptItem.Foreground = Brushes.Red;
+                    }
                 LogHelper.Add($"UpdateTreeView->Add functions");
                 foreach (cFunction functionDefinition in mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).OrderBy(f => f.Alias)) {
                     TreeViewItem treeViewItem = new TreeViewItem();
