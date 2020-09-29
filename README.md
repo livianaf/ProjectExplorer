@@ -23,13 +23,17 @@ Key features:
 - **Go-back**
   * SHIFT+F12 key combination allows you to go back to the last function (reached by F12) or reference (reached by F7).
 
-
 ## Installation
 
 In order to get the addon snapped into ISE, you need to import the provided module:
 Import-Module ProjectExplorer.psm1
 
 You can read further details about the add-on by taking a look at the companion manifest file: ProjectExplorer.psm1.
+
+## Change log
+
+- Added support of PowerShell Classes: identify constructor, methods and properties.
+- Added support of PowerShell DSC Configuration and PowerShell Worflows.
 
 ## License
 

@@ -262,7 +262,13 @@ namespace IseAddons {
             catch (Exception ex) { LogHelper.AddException(ex, "UpdateTreeView", null); }
             foreach (ISEFile file in hostObject.CurrentPowerShellTab.Files) {
                 LogHelper.Add($"UpdateTreeView->Analyze {file.FullPath}");
-                bool flag = false;
+                bool isFunction = false;
+                bool isConfiguration = false;
+                bool isWorkflow = false;
+                bool inclass = false;
+                bool isNewLine = false;
+                int countLevel = 0;
+                string className = "";
                 mProjects.Project.Functions.RemoveFunctionByFile(file.FullPath);
                 FileTreeViewItem scriptItem = new FileTreeViewItem(file.FullPath);
                 scriptItem.Header = Path.GetFileName(file.FullPath);
@@ -270,15 +276,35 @@ namespace IseAddons {
                     scriptItem.IsExpanded = true;
                 Collection<PSParseError> errors = new Collection<PSParseError>();
                 LogHelper.Add($"UpdateTreeView->Search tokens");
-                foreach (PSToken psToken in PSParser.Tokenize(file.Editor.Text, out errors).Where(t => t.Type == PSTokenType.Keyword | t.Type == PSTokenType.CommandArgument)) {
-                    if (psToken.Content.iEquals("function") | psToken.Content.iEquals("workflow")) flag = true;
-                    else if (flag && psToken.Type == PSTokenType.CommandArgument) {
+                //foreach (PSToken psToken in PSParser.Tokenize(file.Editor.Text, out errors).Where(t => t.Type == PSTokenType.Keyword || t.Type == PSTokenType.CommandArgument || t.Type == PSTokenType.Member || t.Type == PSTokenType.Type || t.Type == PSTokenType.GroupStart || t.Type == PSTokenType.GroupEnd)) {
+                foreach (PSToken psToken in PSParser.Tokenize(file.Editor.Text, out errors)) {
+                    if (!inclass && psToken.Type == PSTokenType.Type) continue;
+                    if (!inclass && psToken.Type == PSTokenType.NewLine) continue;
+                    if (psToken.Content.iEquals("class") && psToken.Type == PSTokenType.Keyword) inclass = true;
+                    else if (inclass && className == "" && psToken.Type == PSTokenType.Type) className = psToken.Content;
+                    else if (inclass && className != "" && (psToken.Type == PSTokenType.GroupStart || psToken.Type == PSTokenType.GroupEnd)) { countLevel += psToken.Type == PSTokenType.GroupStart ? 1 : -1; if (countLevel == 0) { inclass = false; className = ""; } }
+                    else if (inclass && className != "" && countLevel == 1 && psToken.Type == PSTokenType.CommandArgument) mProjects.Project.Functions.Items.Add(new cFunction(file.FullPath, psToken.Content, psToken.StartLine, psToken.StartColumn, className));
+                    else if (inclass && className != "" && countLevel == 1 && psToken.Type == PSTokenType.NewLine) isNewLine = true;
+                    else if (inclass && className != "" && countLevel == 1 && psToken.Type == PSTokenType.Variable && isNewLine) { mProjects.Project.Functions.Items.Add(new cFunction(file.FullPath, psToken.Content, psToken.StartLine, psToken.StartColumn+1, className, isPrpty: true)); isNewLine = false; }
+                    else if (psToken.Type == PSTokenType.Keyword && psToken.Content.iEquals("function")) isFunction = true;
+                    else if (psToken.Type == PSTokenType.Keyword && psToken.Content.iEquals("configuration")) isConfiguration = true;
+                    else if (psToken.Type == PSTokenType.Keyword && psToken.Content.iEquals("workflow")) isWorkflow = true;
+                    else if (isFunction && psToken.Type == PSTokenType.CommandArgument) {
                         mProjects.Project.Functions.Items.Add(new cFunction(file.FullPath, psToken.Content, psToken.StartLine, psToken.StartColumn));
-                        flag = false;
+                        isFunction = false;
+                        }
+                    else if (isConfiguration && psToken.Type == PSTokenType.CommandArgument) {
+                        mProjects.Project.Functions.Items.Add(new cFunction(file.FullPath, psToken.Content, psToken.StartLine, psToken.StartColumn, isCfg: true));
+                        isConfiguration = false;
+                        }
+                    else if (isWorkflow && psToken.Type == PSTokenType.CommandArgument) {
+                        mProjects.Project.Functions.Items.Add(new cFunction(file.FullPath, psToken.Content, psToken.StartLine, psToken.StartColumn, isWF: true));
+                        isWorkflow = false;
                         }
                     }
+
                 LogHelper.Add($"UpdateTreeView->Add functions");
-                foreach (cFunction functionDefinition in mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).OrderBy(f => f.Name)) {
+                foreach (cFunction functionDefinition in mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).OrderBy(f => f.Alias)) {
                     TreeViewItem treeViewItem = new TreeViewItem();
                     treeViewItem.Header = CreateChildNode(functionDefinition);
                     treeViewItem.Tag = functionDefinition;
@@ -296,7 +322,7 @@ namespace IseAddons {
             LogHelper.Add($"CreateChildNode({f.SerializedString})");
             DockPanel dp = new DockPanel() { HorizontalAlignment = HorizontalAlignment.Left, LastChildFill = true };
             DockPanel.SetDock(dp, Dock.Right);
-            TextBlock txt = new TextBlock() { Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left, Foreground = Brushes.Black, Text = f.Name };
+            TextBlock txt = new TextBlock() { Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left, Foreground = Brushes.Black, Text = f.Alias };
             TextBlock elip = new TextBlock() { Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left, Foreground = Brushes.Gray, Text = $" / {f.Line}" };
             DockPanel.SetDock(elip, Dock.Right);
             dp.Children.Add(elip);
@@ -398,7 +424,9 @@ namespace IseAddons {
                     (token.Type == PSTokenType.Command && t.Type == PSTokenType.Command) ||
                     (token.Type == PSTokenType.CommandParameter && t.Type == PSTokenType.CommandParameter) ||
                     (token.Type == PSTokenType.Comment && t.Type == PSTokenType.Comment) ||
-                    (token.Type == PSTokenType.Keyword && t.Type == PSTokenType.Keyword))
+                    (token.Type == PSTokenType.Keyword && t.Type == PSTokenType.Keyword) ||
+                    (token.Type == PSTokenType.Member && t.Type == PSTokenType.Member) ||
+                    (token.Type == PSTokenType.Member && t.Type == PSTokenType.CommandArgument))
                     l.Add(new cScriptLocation(Path.GetFileName(FullPath), t.Type, t.StartLine, t.StartColumn, ltxt, token.Content, mProjects.Project.Functions.GetFunctionsByLine(FullPath, t.StartLine)?.Name));
 
                 else if (token.Type == PSTokenType.Variable && t.Type == PSTokenType.Variable)
@@ -418,7 +446,7 @@ namespace IseAddons {
                 string caretLineText = editor.CaretLineText;
                 Tuple<string, int, int> pos = new Tuple<string, int, int>(currentFile, editor.CaretLine, editor.CaretColumn);
                 Collection<PSParseError> errors = new Collection<PSParseError>();
-                List<PSToken> list = PSParser.Tokenize(caretLineText, out errors).Where(t => t.Type == PSTokenType.Command && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
+                List<PSToken> list = PSParser.Tokenize(caretLineText, out errors).Where(t => (t.Type == PSTokenType.Command || t.Type == PSTokenType.Member) && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
 
                 cFunction function = mProjects.Project.Functions.GetFunctionByFileAndName(currentFile, list[0].Content);
                 if (function == null) function = mProjects.Project.Functions.GetFunctionByName(list[0].Content);

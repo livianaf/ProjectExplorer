@@ -1,1 +1,1 @@
-Import-Module D:\source\ProjectExplorer\bin\Debug\ProjectExplorer.psm1
+Import-Module -Name D:\Docs\Pruebas\ProjectExplorer\bin\Debug\ProjectExplorer.psm1
