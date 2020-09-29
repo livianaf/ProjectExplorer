@@ -140,17 +140,18 @@ namespace IseAddons {
             string name = Path.GetFileName(fullPath);
             string folderName = Path.GetDirectoryName(fullPath);
             foreach (TreeViewItem i in cTvFunctions.Items) {
-                if (i.Header.ToString() == name) {
-                    //necesario para que BringIntoView coloque el TvItem al principio de la lista. No vale con llamar a BringIntoView del último hijo antes del padre.
-                    Rect rect = new Rect(-1000, 0, cTvFunctions.ActualWidth + 1000, cTvFunctions.ActualHeight);
-                    if (i.IsExpanded == false)
-                        try { hostObject.CurrentPowerShellTab.Invoke($"CD {folderName}"); }
-                        catch (Exception ex) { LogHelper.AddException(ex, "CurrentPowerShellTab_PropertyChanged", $"Executing CD {folderName}"); }
-                    i.IsExpanded = true;
-                    i.IsSelected = true;
-                    i.BringIntoView(rect);
-                    break;// si no hay else se puede salir directamente.
-                    }
+                if (i.Header.ToString() != name) continue;
+                //necesario para que BringIntoView coloque el TvItem al principio de la lista. No vale con llamar a BringIntoView del último hijo antes del padre.
+                Rect rect = new Rect(-1000, 0, cTvFunctions.ActualWidth + 1000, cTvFunctions.ActualHeight);
+                if (i.IsExpanded == false)
+                    try { hostObject.CurrentPowerShellTab.Invoke($"CD {folderName}"); }
+                    catch (Exception ex) { LogHelper.AddException(ex, "CurrentPowerShellTab_PropertyChanged", $"Executing CD {folderName}"); }
+                i.IsExpanded = true;
+                i.IsSelected = true;
+                // expande todos los niveles
+                foreach (TreeViewItem n1 in i.Items) { n1.IsExpanded = true; foreach (TreeViewItem n2 in n1.Items) n2.IsExpanded = true; }
+                i.BringIntoView(rect);
+                break;// si no hay else se puede salir directamente.
                 //else i.IsExpanded = false; // colapsa todo el árbol menos la rama que interesa.
                 }
             }
@@ -163,6 +164,7 @@ namespace IseAddons {
             if (item == null) return;
             cFunction tag = item.Tag as cFunction;
             if (tag == null) {// doubleclick in file node
+                if (item.GetType().Name != "FileTreeViewItem") return;
                 try {
                     hostObject.CurrentPowerShellTab.Files.SetSelectedFile(hostObject.CurrentPowerShellTab.Files.Where(file => Path.GetFileName(file.FullPath).iEquals(item.Header.ToString())).FirstOrDefault());
                     hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor.SelectCaretLine();
@@ -171,7 +173,7 @@ namespace IseAddons {
                 }
             else {// doubleclick in function node
                 try {
-                    hostObject.CurrentPowerShellTab.Files.SetSelectedFile(hostObject.CurrentPowerShellTab.Files.Where(file => Path.GetFileName(file.FullPath).iEquals(((HeaderedItemsControl)item.Parent).Header.ToString())).FirstOrDefault());
+                    hostObject.CurrentPowerShellTab.Files.SetSelectedFile(hostObject.CurrentPowerShellTab.Files.Where(file => file.FullPath.iEquals(tag.FullName)).FirstOrDefault());
                     hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor.SetCaretPosition(tag.Line, tag.Position);
                     hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor.Select(tag.Line, tag.Position, tag.Line, tag.Position + tag.Name.Length);
                     }
@@ -279,8 +281,8 @@ namespace IseAddons {
                     scriptItem.IsExpanded = true;
                 Collection<PSParseError> errors = new Collection<PSParseError>();
                 LogHelper.Add($"UpdateTreeView->Search tokens");
-                //foreach (PSToken psToken in PSParser.Tokenize(file.Editor.Text, out errors).Where(t => t.Type == PSTokenType.Keyword || t.Type == PSTokenType.CommandArgument || t.Type == PSTokenType.Member || t.Type == PSTokenType.Type || t.Type == PSTokenType.GroupStart || t.Type == PSTokenType.GroupEnd)) {
-                foreach (PSToken psToken in PSParser.Tokenize(file.Editor.Text, out errors)) {
+                PSTokenType[] allowedLst = { PSTokenType.GroupStart, PSTokenType.GroupEnd, PSTokenType.Type, PSTokenType.NewLine, PSTokenType.Keyword, PSTokenType.CommandArgument, PSTokenType.Variable };
+                foreach (PSToken psToken in PSParser.Tokenize(file.Editor.Text, out errors).Where(t => allowedLst.Contains(t.Type))) {
                     if ("&{@{}".Contains(psToken.Content) && (psToken.Type == PSTokenType.GroupStart || psToken.Type == PSTokenType.GroupEnd)) countBracketLevel += psToken.Type == PSTokenType.GroupStart ? 1 : -1; 
                     if ("$(@()".Contains(psToken.Content) && (psToken.Type == PSTokenType.GroupStart || psToken.Type == PSTokenType.GroupEnd)) countParentLevel += psToken.Type == PSTokenType.GroupStart ? 1 : -1;
                     if (!inclass && psToken.Type == PSTokenType.Type) continue;
@@ -290,7 +292,7 @@ namespace IseAddons {
                         inclass = true;
                         }
                     else if (inclass && className == "" && psToken.Type == PSTokenType.Type) className = psToken.Content;
-                    else if (inclass && className != "" && "{}".Contains(psToken.Content) && (psToken.Type == PSTokenType.GroupStart || psToken.Type == PSTokenType.GroupEnd)) { countClassLevel += psToken.Type == PSTokenType.GroupStart ? 1 : -1; if (countClassLevel == 0) { inclass = false; className = ""; } }
+                    else if (inclass && className != "" && "&{@{}$(@()".Contains(psToken.Content) && (psToken.Type == PSTokenType.GroupStart || psToken.Type == PSTokenType.GroupEnd)) { countClassLevel += psToken.Type == PSTokenType.GroupStart ? 1 : -1; if (countClassLevel == 0) { inclass = false; className = ""; } }
                     else if (inclass && className != "" && countClassLevel == 1 && psToken.Type == PSTokenType.CommandArgument) {
                         if (countBracketLevel != 1 && countParentLevel != 0 && possibleErrLine < 0) possibleErrLine = psToken.StartLine;
                         mProjects.Project.Functions.Items.Add(new cFunction(file.FullPath, psToken.Content, psToken.StartLine, psToken.StartColumn, className));
@@ -329,13 +331,10 @@ namespace IseAddons {
                     scriptItem.Foreground = Brushes.Red;
                     }
                 LogHelper.Add($"UpdateTreeView->Add functions");
-                foreach (cFunction functionDefinition in mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).OrderBy(f => f.Alias)) {
-                    TreeViewItem treeViewItem = new TreeViewItem();
-                    treeViewItem.Header = CreateChildNode(functionDefinition);
-                    treeViewItem.Tag = functionDefinition;
-                    scriptItem.Items.Add(treeViewItem);
-                    visibleFunctions++;
-                    }
+                visibleFunctions += AddItemsToList(scriptItem, "Worflows", mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).Where(t => t.IsWF).OrderBy(f => f.Alias));
+                visibleFunctions += AddItemsToList(scriptItem, "DSC", mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).Where(t => t.IsCfg).OrderBy(f => f.Alias));
+                visibleFunctions += AddItemsToList(scriptItem, "Functions", mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).Where(t => t.Class == null).OrderBy(f => f.Alias));
+                visibleFunctions += AddItemsToList(scriptItem, "Classes", mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).Where(t => t.Class != null).OrderBy(f => f.Alias));
                 LogHelper.Add($"UpdateTreeView->Add item");
                 cTvFunctions.Dispatcher.Invoke((Action)(() => cTvFunctions.Items.Add(scriptItem)));
                 }
@@ -343,11 +342,47 @@ namespace IseAddons {
             LogHelper.Add($"UpdateTreeView->End");
             }
         //_____________________________________________________________________________________________________________________________________________________________
+        private int AddItemsToList(TreeViewItem scriptItem, string group, IOrderedEnumerable<cFunction> functions) {
+            int total = 0;
+            if (functions.Count() == 0) return total;
+            if (group != "Classes") {
+                TreeViewItem treeViewItem = new TreeViewItem();
+                treeViewItem.Header = group;
+                treeViewItem.Tag = null;
+                foreach (cFunction functionDefinition in functions) {
+                    total += AddItemToList(treeViewItem, functionDefinition);
+                    }
+                scriptItem.Items.Add(treeViewItem);
+                }
+            else {
+                string className = "";
+                foreach (cFunction functionDefinition in functions) {
+                    if (className == functionDefinition.Class) continue;
+                    TreeViewItem treeViewItem = new TreeViewItem();
+                    className = functionDefinition.Class;
+                    treeViewItem.Header = $"{className} class";
+                    treeViewItem.Tag = null;
+                    scriptItem.Items.Add(treeViewItem);
+                    total += AddItemsToList(treeViewItem, "Properties", functions.Where(t => t.Class == className && t.IsPrpty).OrderBy(f => f.Alias));
+                    total += AddItemsToList(treeViewItem, "Methods", functions.Where(t => t.Class == className && !t.IsPrpty).OrderBy(f => f.Alias));
+                    }
+                }
+            return total;
+            }
+        //_____________________________________________________________________________________________________________________________________________________________
+        private int AddItemToList(TreeViewItem scriptItem, cFunction functionDefinition) {
+            TreeViewItem treeViewItem = new TreeViewItem();
+            treeViewItem.Header = CreateChildNode(functionDefinition);
+            treeViewItem.Tag = functionDefinition;
+            scriptItem.Items.Add(treeViewItem);
+            return 1;
+            }
+        //_____________________________________________________________________________________________________________________________________________________________
         private object CreateChildNode(cFunction f) {
             LogHelper.Add($"CreateChildNode({f.SerializedString})");
             DockPanel dp = new DockPanel() { HorizontalAlignment = HorizontalAlignment.Left, LastChildFill = true };
             DockPanel.SetDock(dp, Dock.Right);
-            TextBlock txt = new TextBlock() { Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left, Foreground = Brushes.Black, Text = f.Alias };
+            TextBlock txt = new TextBlock() { Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left, Foreground = Brushes.Black, Text = f.ShortAlias };
             TextBlock elip = new TextBlock() { Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left, Foreground = Brushes.Gray, Text = $" / {f.Line}" };
             DockPanel.SetDock(elip, Dock.Right);
             dp.Children.Add(elip);
