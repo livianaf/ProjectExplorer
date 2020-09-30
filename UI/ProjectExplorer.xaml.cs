@@ -126,10 +126,8 @@ namespace IseAddons {
             if (!PrjSelected) return;
             if (mProjects.ManagingFiles) return;
 
-            if (mProjects.Project.BreakPoints.Items.Count > 0 && mProjects.Project.BreakPoints.PendingUpdate)
-                    ImportBreakpoints();
+            if (mProjects.Project.BreakPoints.Items.Count > 0 && mProjects.Project.BreakPoints.PendingUpdate) ImportBreakpoints();
 
-            LogHelper.Add($"CurrentPowerShellTab_PropertyChanged->AddScripts");
             if (mProjects.Project.Scripts.Count != hostObject.CurrentPowerShellTab.Files.Count)
                 mProjects.Project.AddScripts(hostObject.CurrentPowerShellTab.Files.ForEach(f => f.FullPath).ToArray());
 
@@ -139,13 +137,12 @@ namespace IseAddons {
             if (string.IsNullOrWhiteSpace(fullPath)) return;
             string name = Path.GetFileName(fullPath);
             string folderName = Path.GetDirectoryName(fullPath);
+
             foreach (TreeViewItem i in cTvFunctions.Items) {
                 if (i.Header.ToString() != name) continue;
                 //necesario para que BringIntoView coloque el TvItem al principio de la lista. No vale con llamar a BringIntoView del último hijo antes del padre.
                 Rect rect = new Rect(-1000, 0, cTvFunctions.ActualWidth + 1000, cTvFunctions.ActualHeight);
-                if (i.IsExpanded == false)
-                    try { hostObject.CurrentPowerShellTab.Invoke($"CD {folderName}"); }
-                    catch (Exception ex) { LogHelper.AddException(ex, "CurrentPowerShellTab_PropertyChanged", $"Executing CD {folderName}"); }
+                if (i.IsExpanded == false) InvokeCmd($"CD {folderName}");
                 i.IsExpanded = true;
                 i.IsSelected = true;
                 // expande todos los niveles
@@ -184,6 +181,8 @@ namespace IseAddons {
         private void UserControl_Loaded( object sender, RoutedEventArgs e ) { LogHelper.Add("UserControl_Loaded"); }
         //_____________________________________________________________________________________________________________________________________________________________
         private void cWriteLog_Click(object sender, RoutedEventArgs e) { LogHelper.Enabled = (cWriteLog.IsChecked == true); }
+        //_____________________________________________________________________________________________________________________________________________________________
+        private void cGroupTypes_Click(object sender, RoutedEventArgs e) { bUpdate_Click(sender, e); }
         #endregion
         #region Utility Methods
         //_____________________________________________________________________________________________________________________________________________________________
@@ -209,12 +208,19 @@ namespace IseAddons {
             mProjects.ManagingFiles = false;
             }
         //_____________________________________________________________________________________________________________________________________________________________
+        private void InvokeCmd(string cmd) {
+            LogHelper.Add($"InvokeCmd [{cmd}]");
+            try { hostObject.CurrentPowerShellTab.Invoke(cmd); }
+            catch (Exception ex) { LogHelper.AddException(ex, "Invoke", cmd); }
+            }
+        //_____________________________________________________________________________________________________________________________________________________________
         private void SelectNewProject() {
             LogHelper.Add("SelectNewProject");
             LastProjectIndexSelected = cLstPrj.SelectedIndex;
             LastProjectSelected = cLstPrj.SelectedItem.ToString();
             lSelected.Text = LastProjectSelected;
             mProjects.Select(LastProjectSelected);
+            cGroupTypes.IsChecked = mProjects.Project.Setting_GroupTypes;
             }
         //_____________________________________________________________________________________________________________________________________________________________
         private bool FileIsOpen(string path) {
@@ -234,7 +240,7 @@ namespace IseAddons {
                 stringBuilder.AppendLine($"$null = Set-PSBreakpoint -Line {breakPoint.Line} -Script {breakPoint.FullName}"+(breakPoint.Enabled?"": " | Disable-PSBreakpoint;"));
                 breakPoint.Updated = true;
                 }
-            if(stringBuilder.Length > 0) hostObject.CurrentPowerShellTab.Invoke(stringBuilder.ToString());
+            InvokeCmd(stringBuilder.ToString());
             }
         //_____________________________________________________________________________________________________________________________________________________________
         private void SaveBreakPoints() {
@@ -243,11 +249,14 @@ namespace IseAddons {
             if (!hostObject.CurrentPowerShellTab.CanInvoke) return;
             mProjects.Project.BreakPoints.Items.Clear();
             List<cBreakPoint> lst = new List<cBreakPoint>();
-            lst.AddRange(hostObject.CurrentPowerShellTab.InvokeSynchronous("Get-PSBreakPoint").Select(pso => pso.BaseObject).Cast<LineBreakpoint>().ForEach(b => new cBreakPoint() {
+            try {
+                lst.AddRange(hostObject.CurrentPowerShellTab.InvokeSynchronous("Get-PSBreakPoint").Select(pso => pso.BaseObject).Cast<LineBreakpoint>().ForEach(b => new cBreakPoint() {
                 FullName = b.Script,
                 Line = b.Line,
                 Enabled = b.Enabled
                 }));
+                }
+            catch (Exception ex) { LogHelper.AddException(ex, "InvokeSynchronous", "Get-PSBreakPoint"); }
             // add only bk in opened files
             foreach (cBreakPoint b in lst) if (FileIsOpen(b.FullName)) mProjects.Project.AddBreakPoint(b);
             }
@@ -331,10 +340,14 @@ namespace IseAddons {
                     scriptItem.Foreground = Brushes.Red;
                     }
                 LogHelper.Add($"UpdateTreeView->Add functions");
-                visibleFunctions += AddItemsToList(scriptItem, "Worflows", mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).Where(t => t.IsWF).OrderBy(f => f.Alias));
-                visibleFunctions += AddItemsToList(scriptItem, "DSC", mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).Where(t => t.IsCfg).OrderBy(f => f.Alias));
-                visibleFunctions += AddItemsToList(scriptItem, "Functions", mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).Where(t => t.Class == null).OrderBy(f => f.Alias));
-                visibleFunctions += AddItemsToList(scriptItem, "Classes", mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).Where(t => t.Class != null).OrderBy(f => f.Alias));
+                if (cGroupTypes.IsChecked == true) {
+                    visibleFunctions += AddItemsToList(scriptItem, "Worflows", mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).Where(t => t.IsWF).OrderBy(f => f.Alias));
+                    visibleFunctions += AddItemsToList(scriptItem, "DSC", mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).Where(t => t.IsCfg).OrderBy(f => f.Alias));
+                    visibleFunctions += AddItemsToList(scriptItem, "Functions", mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).Where(t => t.Class == null).OrderBy(f => f.Alias));
+                    visibleFunctions += AddItemsToList(scriptItem, "Classes", mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).Where(t => t.Class != null).OrderBy(f => f.Alias));
+                    }
+                else foreach (cFunction functionDefinition in mProjects.Project.Functions.GetFunctionsByFile(file.FullPath).OrderBy(f => f.Alias)) AddItemToList(scriptItem, functionDefinition);
+
                 LogHelper.Add($"UpdateTreeView->Add item");
                 cTvFunctions.Dispatcher.Invoke((Action)(() => cTvFunctions.Items.Add(scriptItem)));
                 }
@@ -349,6 +362,7 @@ namespace IseAddons {
                 TreeViewItem treeViewItem = new TreeViewItem();
                 treeViewItem.Header = group;
                 treeViewItem.Tag = null;
+                treeViewItem.IsExpanded = true;
                 foreach (cFunction functionDefinition in functions) {
                     total += AddItemToList(treeViewItem, functionDefinition);
                     }
@@ -361,6 +375,7 @@ namespace IseAddons {
                     TreeViewItem treeViewItem = new TreeViewItem();
                     className = functionDefinition.Class;
                     treeViewItem.Header = $"{className} class";
+                    treeViewItem.IsExpanded = true;
                     treeViewItem.Tag = null;
                     scriptItem.Items.Add(treeViewItem);
                     total += AddItemsToList(treeViewItem, "Properties", functions.Where(t => t.Class == className && t.IsPrpty).OrderBy(f => f.Alias));
@@ -382,7 +397,7 @@ namespace IseAddons {
             LogHelper.Add($"CreateChildNode({f.SerializedString})");
             DockPanel dp = new DockPanel() { HorizontalAlignment = HorizontalAlignment.Left, LastChildFill = true };
             DockPanel.SetDock(dp, Dock.Right);
-            TextBlock txt = new TextBlock() { Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left, Foreground = Brushes.Black, Text = f.ShortAlias };
+            TextBlock txt = new TextBlock() { Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left, Foreground = Brushes.Black, Text = cGroupTypes.IsChecked == true ? f.ShortAlias : f.Alias };
             TextBlock elip = new TextBlock() { Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left, Foreground = Brushes.Gray, Text = $" / {f.Line}" };
             DockPanel.SetDock(elip, Dock.Right);
             dp.Children.Add(elip);
@@ -393,7 +408,7 @@ namespace IseAddons {
         private void SaveProject() {
             LogHelper.Add("SaveProject");
             if (!PrjSelected) return;
-            try { SaveBreakPoints(); UpdateTreeView(); mProjects.Project.Export(); }
+            try { SaveBreakPoints(); UpdateTreeView(); mProjects.Project.Setting_GroupTypes = (cGroupTypes.IsChecked == true); mProjects.Project.Export(); }
             catch (Exception ex) { LogHelper.AddException(ex, "SaveProject", null); }
             }
         #endregion

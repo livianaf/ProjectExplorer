@@ -47,6 +47,7 @@
             </StackPanel>
             <TreeView Grid.Row="1"  MouseDoubleClick="cTvFunctions_MouseDoubleClick" x:Name="cTvFunctions" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" MinHeight="60" ScrollViewer.HorizontalScrollBarVisibility="Hidden"/>
             <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                <CheckBox Name="cGroupTypes" Click="cGroupTypes_Click" Content="Group by Types    "  IsChecked="True" VerticalAlignment="Center" HorizontalAlignment="Left"/>
                 <CheckBox Name="cWriteLog" Click="cWriteLog_Click" Content="Write log           "  IsChecked="False" VerticalAlignment="Center" HorizontalAlignment="Left"/>
                 <Button Click="bUpdate_Click" x:Name="bUpdate" Content="Update" Margin="4" ToolTip="Updates the functions in the treeview" HorizontalAlignment="Right" VerticalAlignment="Center" Width="56" Height="20"/>
             </StackPanel>
