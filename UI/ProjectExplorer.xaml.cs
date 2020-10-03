@@ -7,6 +7,7 @@ using System.Linq;
 using System.Management.Automation;
 using System.Runtime.ExceptionServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -411,6 +412,75 @@ namespace IseAddons {
             try { SaveBreakPoints(); UpdateTreeView(); mProjects.Project.Setting_GroupTypes = (cGroupTypes.IsChecked == true); mProjects.Project.Export(); }
             catch (Exception ex) { LogHelper.AddException(ex, "SaveProject", null); }
             }
+        //_____________________________________________________________________________________________________________________________________________________________
+        private List<cScriptLocation> GetAllReferenceLocations(PSToken token) {
+            LogHelper.Add("GetAllReferenceLocations");
+            List<cScriptLocation> l = new List<cScriptLocation>();
+            ISEFile file = hostObject.CurrentPowerShellTab.Files.SelectedFile;
+            GetReferencesFromScriptText(token, l, file.FullPath, file.Editor.Text);
+            foreach (ISEFile f in hostObject.CurrentPowerShellTab.Files) {
+                if (file.FullPath.iEquals(f.FullPath)) continue;
+                GetReferencesFromScriptText(token, l, f.FullPath, f.Editor.Text);
+                }
+            return l;
+            }
+        //_____________________________________________________________________________________________________________________________________________________________
+        private void GetReferencesFromScriptText(PSToken token, List<cScriptLocation> l, string FullPath, string txt) {
+            if (!GetReferencesFromScriptTextWithParser(token, l, FullPath, txt)) GetReferencesFromScriptTextWithRegEx(token, l, FullPath, txt);
+            }
+        //_____________________________________________________________________________________________________________________________________________________________
+        private void GetReferencesFromScriptTextWithRegEx(PSToken token, List<cScriptLocation> l, string FullPath, string txt) {
+            LogHelper.Add("GetReferencesFromScriptTextWithRegEx");
+            string pattern = $"[\\W\\b]+({(Regex.Escape(token.Content))})[\\W\\b]+";
+            if (!Regex.IsMatch(txt, pattern, RegexOptions.IgnoreCase)) return;
+            string[] ltxt = txt.Replace("\r", "").Split('\n');
+            for (int i = 0; i < ltxt.Length; i++) {
+                foreach (Match m in Regex.Matches($" {ltxt[i]} ", pattern, RegexOptions.IgnoreCase)) {
+                    if (token.Type == PSTokenType.Variable)
+                        l.Add(new cScriptLocation(Path.GetFileName(FullPath), token.Type, i + 1, m.Groups[1].Index - 1, ltxt, $"${token.Content}", mProjects.Project.Functions.GetFunctionsByLine(FullPath, i + 1)?.Name));
+                    else if (token.Type == PSTokenType.String)
+                        l.Add(new cScriptLocation(Path.GetFileName(FullPath), token.Type, i + 1, m.Groups[1].Index - 1, ltxt, $"\"{token.Content}\"", mProjects.Project.Functions.GetFunctionsByLine(FullPath, i + 1)?.Name));
+                    else
+                        l.Add(new cScriptLocation(Path.GetFileName(FullPath), token.Type, i + 1, m.Groups[1].Index, ltxt, token.Content, mProjects.Project.Functions.GetFunctionsByLine(FullPath, i + 1)?.Name));
+                    }
+                }
+            }
+        //_____________________________________________________________________________________________________________________________________________________________
+        private bool GetReferencesFromScriptTextWithParser(PSToken token, List<cScriptLocation> l, string FullPath, string txt) {
+            LogHelper.Add("GetReferencesFromScriptTextWithParser");
+            Collection<PSParseError> errors = new Collection<PSParseError>();
+            Queue<Token> tokenQueue = new Queue<Token>();
+            ScriptBlock scriptBlock = null;
+
+            try { scriptBlock = ScriptBlock.Create(txt); } catch (Exception ex) { LogHelper.Add($"GetReferencesFromScriptText->Create ERROR: {ex.Message}"); return false; }
+
+            string[] ltxt = txt.Replace("\r", "").Split('\n');
+            foreach (PSToken t in PSParser.Tokenize(new object[] { scriptBlock }, out errors)) {
+                tokenQueue.Enqueue(new Token(t));
+                if (token.Type != PSTokenType.String) Token.GetTokensFromStringToken(token, txt, tokenQueue, t);
+                }
+            foreach (Token t in tokenQueue) {
+                if (t.Content == null) continue;
+                if (!t.Content.iEquals(token.Content)) continue;
+                if ((token.Type == PSTokenType.CommandArgument && t.Type == PSTokenType.Command) ||
+                    (token.Type == PSTokenType.CommandArgument && t.Type == PSTokenType.CommandArgument) ||
+                    (token.Type == PSTokenType.Command && t.Type == PSTokenType.CommandArgument) ||
+                    (token.Type == PSTokenType.Command && t.Type == PSTokenType.Command) ||
+                    (token.Type == PSTokenType.CommandParameter && t.Type == PSTokenType.CommandParameter) ||
+                    (token.Type == PSTokenType.Comment && t.Type == PSTokenType.Comment) ||
+                    (token.Type == PSTokenType.Keyword && t.Type == PSTokenType.Keyword) ||
+                    (token.Type == PSTokenType.Member && t.Type == PSTokenType.Member) ||
+                    (token.Type == PSTokenType.Member && t.Type == PSTokenType.CommandArgument))
+                    l.Add(new cScriptLocation(Path.GetFileName(FullPath), t.Type, t.StartLine, t.StartColumn, ltxt, token.Content, mProjects.Project.Functions.GetFunctionsByLine(FullPath, t.StartLine)?.Name));
+
+                else if (token.Type == PSTokenType.Variable && t.Type == PSTokenType.Variable)
+                    l.Add(new cScriptLocation(Path.GetFileName(FullPath), t.Type, t.StartLine, t.StartColumn, ltxt, $"${token.Content}", mProjects.Project.Functions.GetFunctionsByLine(FullPath, t.StartLine)?.Name));
+
+                else if (token.Type == PSTokenType.String && t.Type == PSTokenType.String)
+                    l.Add(new cScriptLocation(Path.GetFileName(FullPath), t.Type, t.StartLine, t.StartColumn, ltxt, $"\"{token.Content}\"", mProjects.Project.Functions.GetFunctionsByLine(FullPath, t.StartLine)?.Name));
+                }
+            return true;
+            }
         #endregion
         #region Menu Actions
         //_____________________________________________________________________________________________________________________________________________________________
@@ -467,51 +537,6 @@ namespace IseAddons {
                 catch (Exception ex) { LogHelper.AddException(ex, "GetReferences", null); }
                 }
             }
-        //_____________________________________________________________________________________________________________________________________________________________
-        private List<cScriptLocation> GetAllReferenceLocations(PSToken token) {
-            LogHelper.Add("GetAllReferenceLocations");
-            List<cScriptLocation> l = new List<cScriptLocation>();
-            ISEFile file = hostObject.CurrentPowerShellTab.Files.SelectedFile;
-            GetReferencesFromScriptText(token, l, file.FullPath, file.Editor.Text);
-            foreach (ISEFile f in hostObject.CurrentPowerShellTab.Files) {
-                if (file.FullPath.iEquals(f.FullPath)) continue;
-                GetReferencesFromScriptText(token, l, f.FullPath, f.Editor.Text);
-                }
-            return l;
-            }
-        //_____________________________________________________________________________________________________________________________________________________________
-        private void GetReferencesFromScriptText(PSToken token, List<cScriptLocation> l, string FullPath, string txt) {
-            LogHelper.Add("GetReferencesFromScriptText");
-            Collection<PSParseError> errors = new Collection<PSParseError>();
-            Queue<Token> tokenQueue = new Queue<Token>();
-            ScriptBlock scriptBlock = ScriptBlock.Create(txt);
-            string[] ltxt = txt.Replace("\r", "").Split('\n');
-            foreach (PSToken t in PSParser.Tokenize(new object[] { scriptBlock }, out errors)) {
-                tokenQueue.Enqueue(new Token(t));
-                if(token.Type != PSTokenType.String) Token.GetTokensFromStringToken(token, txt, tokenQueue, t);
-                }
-            foreach (Token t in tokenQueue) {
-                if (t.Content == null) continue;
-                if (!t.Content.iEquals(token.Content)) continue;
-                if ((token.Type == PSTokenType.CommandArgument && t.Type == PSTokenType.Command) ||
-                    (token.Type == PSTokenType.CommandArgument && t.Type == PSTokenType.CommandArgument) ||
-                    (token.Type == PSTokenType.Command && t.Type == PSTokenType.CommandArgument) ||
-                    (token.Type == PSTokenType.Command && t.Type == PSTokenType.Command) ||
-                    (token.Type == PSTokenType.CommandParameter && t.Type == PSTokenType.CommandParameter) ||
-                    (token.Type == PSTokenType.Comment && t.Type == PSTokenType.Comment) ||
-                    (token.Type == PSTokenType.Keyword && t.Type == PSTokenType.Keyword) ||
-                    (token.Type == PSTokenType.Member && t.Type == PSTokenType.Member) ||
-                    (token.Type == PSTokenType.Member && t.Type == PSTokenType.CommandArgument))
-                    l.Add(new cScriptLocation(Path.GetFileName(FullPath), t.Type, t.StartLine, t.StartColumn, ltxt, token.Content, mProjects.Project.Functions.GetFunctionsByLine(FullPath, t.StartLine)?.Name));
-
-                else if (token.Type == PSTokenType.Variable && t.Type == PSTokenType.Variable)
-                    l.Add(new cScriptLocation(Path.GetFileName(FullPath), t.Type, t.StartLine, t.StartColumn, ltxt, $"${token.Content}", mProjects.Project.Functions.GetFunctionsByLine(FullPath, t.StartLine)?.Name));
-
-                else if (token.Type == PSTokenType.String && t.Type == PSTokenType.String)
-                    l.Add(new cScriptLocation(Path.GetFileName(FullPath), t.Type, t.StartLine, t.StartColumn, ltxt, $"\"{token.Content}\"", mProjects.Project.Functions.GetFunctionsByLine(FullPath, t.StartLine)?.Name));
-                }
-            }
-
         //_____________________________________________________________________________________________________________________________________________________________
         public bool GoToDefinition() {
             LogHelper.Add("GoToDefinition");

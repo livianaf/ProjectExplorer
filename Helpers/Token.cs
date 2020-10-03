@@ -64,7 +64,7 @@ namespace IseAddons {
                 CaptureCollection cc = g.Captures;
                 for (int j = 0; j < cc.Count; j++) {
                     Capture c = cc[j];
-                    System.Console.WriteLine("Capture" + j + "='" + c + "', Position=" + c.Index);
+                    //System.Console.WriteLine("Capture" + j + "='" + c + "', Position=" + c.Index);
                     ScriptBlock scriptBlock = ScriptBlock.Create(g.ToString());
                     foreach (PSToken pst in PSParser.Tokenize(new object[] { scriptBlock }, out errors)) {
                         if (pst.Type != PSTokenType.Variable) continue;
