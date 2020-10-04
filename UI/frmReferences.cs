@@ -7,14 +7,20 @@ using System.Drawing;
 namespace IseAddons {
     //_____________________________________________________________________________________________________________________________________________________________
     public partial class frmReferences : Form {
+        private static Rectangle DlgBounds = new Rectangle(-1, -1, -1, -1);
         //_____________________________________________________________________________________________________________________________________________________________
-        public string Command { set { this.Text = $"References {value}"; } }
+        public string Command { set { this.Text = value; } }
         public List<cScriptLocation> Locations { set { ShowLocations(value); } }
         public long LocationsCount { get { return cLst.Items.Count; } }
         public cScriptLocation SelectedLocation { get { if (cLst.SelectedItems.Count != 1) return null; return (cScriptLocation)cLst.SelectedItems[0].Tag; } }
         public bool ReferenceSelected { get; private set;} = false;
         //_____________________________________________________________________________________________________________________________________________________________
-        public frmReferences() { InitializeComponent(); cContext.BackColor = Color.White; cContext.ReadOnly = true; }
+        public frmReferences() { 
+            InitializeComponent(); 
+            cContext.BackColor = Color.White; 
+            cContext.ReadOnly = true;
+            if (DlgBounds.X >= 0) { this.StartPosition = FormStartPosition.Manual; this.DesktopBounds = DlgBounds; }
+            }
         //_____________________________________________________________________________________________________________________________________________________________
         public void SelectDefaultLocation(string fileName, int line) {
             foreach (ListViewItem i in cLst.Items) {
@@ -52,5 +58,7 @@ namespace IseAddons {
             cScriptLocation f = (cScriptLocation)cLst.SelectedItems[0].Tag;
             PSSyntaxHelper.AddText(cContext, string.Join("\r\n", f.lineContext), f.ContextSize, f.position, f.word);
             }
+        //_____________________________________________________________________________________________________________________________________________________________
+        private void frmReferences_FormClosing(object sender, FormClosingEventArgs e) { DlgBounds = this.DesktopBounds; }
         }
     }

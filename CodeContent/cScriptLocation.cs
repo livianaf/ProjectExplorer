@@ -1,5 +1,6 @@
 ﻿//_____________________________________________________________________________________________________________________________________________________________
 using System;
+using System.IO;
 using System.Management.Automation;
 
 //_____________________________________________________________________________________________________________________________________________________________
@@ -18,7 +19,9 @@ namespace IseAddons {
         private const int contextSize = 4;
         public int ContextSize { get; private set; }
         //_____________________________________________________________________________________________________________________________________________________________
-        public cScriptLocation( string fileName, PSTokenType type, int line, int position, string[] fileContent, string word, string functionName) {
+        public cScriptLocation(string fileName, int line, int position, string functionName) : this(fileName, PSTokenType.CommandArgument, line, position, File.ReadAllLines(fileName), functionName, functionName) { }
+        //_____________________________________________________________________________________________________________________________________________________________
+        public cScriptLocation(string fileName, PSTokenType type, int line, int position, string[] fileContent, string word, string functionName) {
             this.fileName = fileName; this.type = type; this.line = line; this.position = position; this.word = word; this.functionName = functionName;
             lineText = (line > fileContent.Length ? $"...{word}..." : fileContent[-1 + line]);
             if ((line - contextSize) >= fileContent.Length) return;

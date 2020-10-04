@@ -18,9 +18,15 @@ namespace IseAddons {
             if(!File.Exists(fullFunctionsFileName)) using (File.Create(fullFunctionsFileName)) { }
             }
         //_____________________________________________________________________________________________________________________________________________________________
-        public cFunction GetFunctionByName(string Name) => Items.Where(f => f.Name.iEquals(Name)).FirstOrDefault();
+        public List<cFunction> GetFunctionByName(string Name) => Items.Where(f => f.Name.iEquals(Name)).ToList();
         //_____________________________________________________________________________________________________________________________________________________________
-        public cFunction GetFunctionByFileAndName(string fullPath, string Name) => Items.Where(f => f.Name.iEquals(Name) && f.FullName.iEquals(fullPath)).FirstOrDefault();
+        public List<cFunction> GetFunctionByFileAndName(string fullPath, string Name) => Items.Where(f => f.Name.iEquals(Name) && f.FullName.iEquals(fullPath)).ToList();
+        //_____________________________________________________________________________________________________________________________________________________________
+        public List<cScriptLocation> GetScriptLocations(List<cFunction> functions) { 
+            List<cScriptLocation> l = new List<cScriptLocation>();
+            foreach (cFunction function in functions) l.Add(new cScriptLocation(function.FullName, function.Line, function.Position, Name));
+            return l; 
+            }
         //_____________________________________________________________________________________________________________________________________________________________
         public cFunction GetFunctionsByLine(string fullPath, int line) {
             List<cFunction> l = Items.Where(f => f.Line <= line && f.FullName.iEquals(fullPath)).Select(f => f).ToList();

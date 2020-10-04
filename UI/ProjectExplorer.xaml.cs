@@ -481,6 +481,19 @@ namespace IseAddons {
                 }
             return true;
             }
+        //_____________________________________________________________________________________________________________________________________________________________
+        private cFunction GetSelectedFileName(List<cFunction> functions, string currentFile, ISEEditor editor) {
+            if (functions.Count == 1) return functions[0];
+            List<cScriptLocation> locations = mProjects.Project.Functions.GetScriptLocations(functions);
+            using (frmReferences f = new frmReferences()) {
+                f.Locations = locations;
+                f.SelectDefaultLocation(Path.GetFileName(currentFile), editor.CaretLine);
+                f.Command = "Found more than one candidate. Select one of them.";
+                f.ShowDialog(new WindowWrapper(WindowWrapper.GetSafeHandle()));
+                if (!f.ReferenceSelected) return null;
+                return functions.Where(func => func.FullName == f.SelectedLocation.fileName && func.Line == f.SelectedLocation.line).FirstOrDefault();
+                }
+            }
         #endregion
         #region Menu Actions
         //_____________________________________________________________________________________________________________________________________________________________
@@ -524,7 +537,7 @@ namespace IseAddons {
             using (frmReferences f = new frmReferences()) {
                 f.Locations = lst;
                 f.SelectDefaultLocation(Path.GetFileName(currentFile), editor.CaretLine);
-                f.Command = title;
+                f.Command = $"References {title}";
                 f.ShowDialog(new WindowWrapper(WindowWrapper.GetSafeHandle()));
                 if (!f.ReferenceSelected) return;
                 cScriptLocation l = f.SelectedLocation;
@@ -548,20 +561,19 @@ namespace IseAddons {
                 Collection<PSParseError> errors = new Collection<PSParseError>();
                 List<PSToken> list = PSParser.Tokenize(caretLineText, out errors).Where(t => (t.Type == PSTokenType.Command || t.Type == PSTokenType.Member) && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
 
-                cFunction function = mProjects.Project.Functions.GetFunctionByFileAndName(currentFile, list[0].Content);
-                if (function == null) function = mProjects.Project.Functions.GetFunctionByName(list[0].Content);
-                if (function == null) return false;
+                List<cFunction> functions = mProjects.Project.Functions.GetFunctionByFileAndName(currentFile, list[0].Content);
+                if (functions.Count == 0) functions = mProjects.Project.Functions.GetFunctionByName(list[0].Content);
+                if (functions.Count == 0) return false;
+
+                cFunction function = GetSelectedFileName(functions, currentFile, editor);
 
                 ISEFile file = hostObject.CurrentPowerShellTab.Files.Where(x => x.FullPath.iEquals(function.FullName)).FirstOrDefault();
-
-                if (file != null) {
-                    hostObject.CurrentPowerShellTab.Files.SetSelectedFile(file);
-                    }
+                if (file != null) hostObject.CurrentPowerShellTab.Files.SetSelectedFile(file);
                 else {
                     try { hostObject.CurrentPowerShellTab.Files.Add(function.FullName); }
                     catch (Exception ex) { LogHelper.AddException(ex, "GoToDefinition", null); return false; }
                     }
-                hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor.SetCaretPosition(function.Line, 1);
+                hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor.SetCaretPosition(functions[0].Line, 1);
                 hostObject.CurrentPowerShellTab.Files.SelectedFile.Editor.Select(function.Line, function.Position, function.Line, function.Position + function.Name.Length);
                 BackList.Push(pos);
                 return true;

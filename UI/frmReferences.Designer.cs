@@ -118,6 +118,7 @@
             this.Name = "frmReferences";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
             this.Text = "frmReferencias";
+            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.frmReferences_FormClosing);
             this.ResumeLayout(false);
 
             }
