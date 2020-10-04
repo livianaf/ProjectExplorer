@@ -26,7 +26,9 @@ Key features:
 ## Installation
 
 In order to get the addon snapped into ISE, you need to import the provided module:
+```PowerShell
 Import-Module ProjectExplorer.psm1
+```
 
 You can read further details about the add-on by taking a look at the companion manifest file: ProjectExplorer.psm1.
 
