@@ -29,6 +29,8 @@ namespace IseAddons {
         public ProjectExplorer() {
             LogHelper.Add("ProjectExplorer");
             InitializeComponent();
+            cParentGrid.RowDefinitions[1].Height = new GridLength(0);
+            cParentGrid.RowDefinitions[2].Height = new GridLength(0);
             AppDomain.CurrentDomain.DomainUnload += new EventHandler(CurrentDomain_ProcessExit);
             AppDomain.CurrentDomain.ProcessExit += new EventHandler(CurrentDomain_ProcessExit);
             AppDomain.CurrentDomain.FirstChanceException += new EventHandler<FirstChanceExceptionEventArgs>(CurrentDomain_FirstChanceException);
@@ -49,6 +51,7 @@ namespace IseAddons {
         private void cLstPrj_MouseDoubleClick(object sender, MouseButtonEventArgs e) {
             LogHelper.Add("cLstPrj_MouseDoubleClick");
             if (cLstPrj.SelectedItems.Count != 1) return;
+            if (cParentGrid.RowDefinitions[1].Height == new GridLength(0)) { cParentGrid.RowDefinitions[1].Height = new GridLength(5); cParentGrid.RowDefinitions[2].Height = new GridLength(3, GridUnitType.Star); ; }
             if ("Busy" == (string)cLstPrj.Tag) return;
             cLstPrj.Tag = "Busy";
             ISEFileCollection files = hostObject.CurrentPowerShellTab.Files;
@@ -98,6 +101,7 @@ namespace IseAddons {
         //_____________________________________________________________________________________________________________________________________________________________
         private void mProjectDelete_Click( object sender, RoutedEventArgs e ) {
             LogHelper.Add("mProjectDelete_Click");
+            if (cLstPrj.SelectedItem == null) return;
             string sPrjToBeDeleted = cLstPrj.SelectedItem.ToString();
             if (LastProjectSelected != null && LastProjectSelected.iEquals(sPrjToBeDeleted)) {
                 MessageBox.Show("You must close the project before deletion", "Project Explorer", MessageBoxButton.OK, MessageBoxImage.Exclamation);
@@ -110,6 +114,7 @@ namespace IseAddons {
         //_____________________________________________________________________________________________________________________________________________________________
         private void mProjectRename_Click(object sender, RoutedEventArgs e) {
             LogHelper.Add("mProjectDelete_Click");
+            if (cLstPrj.SelectedItem == null) return;
             string sPrjToBeRename = cLstPrj.SelectedItem.ToString();
             if (LastProjectSelected != null && LastProjectSelected.iEquals(sPrjToBeRename)) {
                 MessageBox.Show("You must close the project before rename", "Project Explorer", MessageBoxButton.OK, MessageBoxImage.Exclamation);
