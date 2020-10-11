@@ -173,9 +173,9 @@
         <Grid x:Name="cProjectsGrid" Grid.Row="0" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" MinHeight="60" >
             <Grid.RowDefinitions>
                 <RowDefinition Height="30" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="5" />
                 <RowDefinition Height="30"/>
+                <RowDefinition Height="5" />
+                <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="1*"/>
@@ -185,7 +185,7 @@
                 <TextBlock  Margin="5"  FontWeight="Bold">Projects:</TextBlock>
                 <TextBlock Name="lSelected" Margin="0,5" Foreground="Gray" FontWeight="Bold"></TextBlock>
             </StackPanel>
-            <ListBox Grid.Row="1" Margin="5" Grid.ColumnSpan="2"  Name="cLstPrj" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" MinHeight="60" MouseDoubleClick="cLstPrj_MouseDoubleClick" ScrollViewer.HorizontalScrollBarVisibility="Hidden" Background="Transparent" BorderBrush="Transparent">
+            <ListBox Grid.Row="3" Margin="5" Grid.ColumnSpan="2"  Name="cLstPrj" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" MinHeight="60" MouseDoubleClick="cLstPrj_MouseDoubleClick" ScrollViewer.HorizontalScrollBarVisibility="Hidden" Background="Transparent" BorderBrush="Transparent">
                 <ListBox.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="Rename" Click="mProjectRename_Click"/>
@@ -193,8 +193,8 @@
                     </ContextMenu>
                 </ListBox.ContextMenu>
             </ListBox>
-            <TextBox Grid.Row="3" Grid.Column="0" Name="cNamePrj" Margin="4" DockPanel.Dock="Right" Background="{Binding Background, ElementName=cGrid}" Style="{DynamicResource TextBoxStyle1}">New_Name</TextBox>
-            <Button Grid.Row="3" Grid.Column="1"  Name="bSaveNewProject" Margin="4" Width="65" Click="bSaveNewProject_Click" ToolTip="Add new project with current files" Tag="ADD" Style="{DynamicResource ButtonStyle1}" FontWeight="Bold">Add</Button>
+            <TextBox Grid.Row="1" Grid.Column="0" Name="cNamePrj" Margin="4" DockPanel.Dock="Right" Background="{Binding Background, ElementName=cGrid}" Style="{DynamicResource TextBoxStyle1}">New_Name</TextBox>
+            <Button Grid.Row="1" Grid.Column="1"  Name="bSaveNewProject" Margin="4" Width="65" Click="bSaveNewProject_Click" ToolTip="Add new project with current files" Tag="ADD" Style="{DynamicResource ButtonStyle1}" FontWeight="Bold">Add</Button>
         </Grid >
         <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" Background="LightBlue" BorderThickness="1" BorderBrush="DarkGray" />
         <Grid x:Name="cFunctionsGrid" Grid.Row="3" Margin="5" VerticalAlignment="Stretch">
@@ -202,9 +202,10 @@
                 <RowDefinition Height="30"/>
                 <RowDefinition Height="*"/>
                 <RowDefinition Height="30"/>
+                <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
             <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Left">
-                <TextBlock Grid.Row="0" Margin="4" FontWeight="Bold">Files / Functions:</TextBlock>
+                <TextBlock Margin="4" FontWeight="Bold">Files / Functions:</TextBlock>
                 <TextBlock Name="lOpened" Margin="0,5" Foreground="Gray" FontWeight="Bold"></TextBlock>
             </StackPanel>
             <TreeView Grid.Row="1"  MouseDoubleClick="cTvFunctions_MouseDoubleClick" x:Name="cTvFunctions" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" MinHeight="60" ScrollViewer.HorizontalScrollBarVisibility="Hidden" Background="Transparent" BorderBrush="Transparent"/>
@@ -213,6 +214,21 @@
                 <CheckBox Name="cWriteLog" Click="cWriteLog_Click" Content="Write log           "  IsChecked="False" VerticalAlignment="Center" HorizontalAlignment="Left" Style="{DynamicResource CheckBoxStyle1}"/>
                 <Button Click="bUpdate_Click" x:Name="bUpdate" Content="Update" Margin="0,0,4,0" ToolTip="Updates the functions in the treeview" HorizontalAlignment="Right" VerticalAlignment="Center" Width="65" Height="20" Style="{DynamicResource ButtonStyle1}" FontWeight="Bold"/>
             </StackPanel>
+            <TextBlock Grid.Row="3" Margin="4" FontWeight="Bold" TextWrapping="Wrap" Foreground="Gray">
+                To start:<LineBreak/>
+                - Add a new project or double click over one from the list.<LineBreak/>
+                <LineBreak/>
+                To add script files to a project:<LineBreak/>
+                - Open a script file in a new ISE tab.<LineBreak/>
+                <LineBreak/>
+                To save the list of script files of a project:<LineBreak/>
+                - Click Update button or open a new file project.<LineBreak/>
+                <LineBreak/>
+                Keyboard shortcuts:<LineBreak/>
+                - F12: Go to definition<LineBreak/>
+                - Shift+F12: Return to last position.<LineBreak/>
+                - F7: Search references.<LineBreak/>
+            </TextBlock>
         </Grid>
     </Grid>
 </UserControl>

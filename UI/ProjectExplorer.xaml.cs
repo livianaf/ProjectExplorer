@@ -29,8 +29,7 @@ namespace IseAddons {
         public ProjectExplorer() {
             LogHelper.Add("ProjectExplorer");
             InitializeComponent();
-            cParentGrid.RowDefinitions[1].Height = new GridLength(0);
-            cParentGrid.RowDefinitions[2].Height = new GridLength(0);
+            ShowProjectDetail(false);
             AppDomain.CurrentDomain.DomainUnload += new EventHandler(CurrentDomain_ProcessExit);
             AppDomain.CurrentDomain.ProcessExit += new EventHandler(CurrentDomain_ProcessExit);
             AppDomain.CurrentDomain.FirstChanceException += new EventHandler<FirstChanceExceptionEventArgs>(CurrentDomain_FirstChanceException);
@@ -51,7 +50,7 @@ namespace IseAddons {
         private void cLstPrj_MouseDoubleClick(object sender, MouseButtonEventArgs e) {
             LogHelper.Add("cLstPrj_MouseDoubleClick");
             if (cLstPrj.SelectedItems.Count != 1) return;
-            if (cParentGrid.RowDefinitions[1].Height == new GridLength(0)) { cParentGrid.RowDefinitions[1].Height = new GridLength(5); cParentGrid.RowDefinitions[2].Height = new GridLength(3, GridUnitType.Star); ; }
+            ShowProjectDetail();
             if ("Busy" == (string)cLstPrj.Tag) return;
             cLstPrj.Tag = "Busy";
             ISEFileCollection files = hostObject.CurrentPowerShellTab.Files;
@@ -75,6 +74,7 @@ namespace IseAddons {
         private void bSaveNewProject_Click(object sender, RoutedEventArgs e) {
             LogHelper.Add("bSaveNewProject_Click");
             if (string.IsNullOrWhiteSpace(cNamePrj.Text.Trim())) return;
+            ShowProjectDetail();
             cNamePrj.Text = mProjects.GenerateUniqueName(cNamePrj.Text);
             if (((string)bSaveNewProject.Tag).iStartsWith("RENAME")) {
                 string oldName = ((string)bSaveNewProject.Tag).Split('|')[1];
@@ -252,7 +252,7 @@ namespace IseAddons {
         private void SaveBreakPoints() {
             LogHelper.Add("SaveBreakPoints");
             if (!PrjSelected) return;
-            if (!hostObject.CurrentPowerShellTab.CanInvoke) return;
+            try { if (!hostObject.CurrentPowerShellTab.CanInvoke) return; } catch (Exception) { return; }
             mProjects.Project.BreakPoints.Items.Clear();
             List<cBreakPoint> lst = new List<cBreakPoint>();
             try {
@@ -294,10 +294,9 @@ namespace IseAddons {
                 scriptItem.Header = Path.GetFileName(file.FullPath);
                 if (file == hostObject.CurrentPowerShellTab.Files.SelectedFile)
                     scriptItem.IsExpanded = true;
-                Collection<PSParseError> errors = new Collection<PSParseError>();
                 LogHelper.Add($"UpdateTreeView->Search tokens");
                 PSTokenType[] allowedLst = { PSTokenType.GroupStart, PSTokenType.GroupEnd, PSTokenType.Type, PSTokenType.NewLine, PSTokenType.Keyword, PSTokenType.CommandArgument, PSTokenType.Variable };
-                foreach (PSToken psToken in PSParser.Tokenize(file.Editor.Text, out errors).Where(t => allowedLst.Contains(t.Type))) {
+                foreach (PSToken psToken in PSParser.Tokenize(file.Editor.Text, out Collection<PSParseError> errors).Where(t => allowedLst.Contains(t.Type))) {
                     if ("&{@{}".Contains(psToken.Content) && (psToken.Type == PSTokenType.GroupStart || psToken.Type == PSTokenType.GroupEnd)) countBracketLevel += psToken.Type == PSTokenType.GroupStart ? 1 : -1; 
                     if ("$(@()".Contains(psToken.Content) && (psToken.Type == PSTokenType.GroupStart || psToken.Type == PSTokenType.GroupEnd)) countParentLevel += psToken.Type == PSTokenType.GroupStart ? 1 : -1;
                     if (!inclass && psToken.Type == PSTokenType.Type) continue;
@@ -365,10 +364,7 @@ namespace IseAddons {
             int total = 0;
             if (functions.Count() == 0) return total;
             if (group != "Classes") {
-                TreeViewItem treeViewItem = new TreeViewItem();
-                treeViewItem.Header = group;
-                treeViewItem.Tag = null;
-                treeViewItem.IsExpanded = true;
+                TreeViewItem treeViewItem = new TreeViewItem() { Header = group, Tag = null, IsExpanded = true };
                 foreach (cFunction functionDefinition in functions) {
                     total += AddItemToList(treeViewItem, functionDefinition);
                     }
@@ -453,14 +449,13 @@ namespace IseAddons {
         //_____________________________________________________________________________________________________________________________________________________________
         private bool GetReferencesFromScriptTextWithParser(PSToken token, List<cScriptLocation> l, string FullPath, string txt) {
             LogHelper.Add("GetReferencesFromScriptTextWithParser");
-            Collection<PSParseError> errors = new Collection<PSParseError>();
             Queue<Token> tokenQueue = new Queue<Token>();
-            ScriptBlock scriptBlock = null;
+            ScriptBlock scriptBlock;
 
             try { scriptBlock = ScriptBlock.Create(txt); } catch (Exception ex) { LogHelper.Add($"GetReferencesFromScriptText->Create ERROR: {ex.Message}"); return false; }
 
             string[] ltxt = txt.Replace("\r", "").Split('\n');
-            foreach (PSToken t in PSParser.Tokenize(new object[] { scriptBlock }, out errors)) {
+            foreach (PSToken t in PSParser.Tokenize(new object[] { scriptBlock }, out Collection<PSParseError> errors)) {
                 tokenQueue.Enqueue(new Token(t));
                 if (token.Type != PSTokenType.String) Token.GetTokensFromStringToken(token, txt, tokenQueue, t);
                 }
@@ -499,6 +494,13 @@ namespace IseAddons {
                 return functions.Where(func => func.FullName == f.SelectedLocation.fileName && func.Line == f.SelectedLocation.line).FirstOrDefault();
                 }
             }
+        //_____________________________________________________________________________________________________________________________________________________________
+        private void ShowProjectDetail(bool option = true) {
+            cFunctionsGrid.RowDefinitions[0].Height = new GridLength(option ? 30 : 0);
+            cFunctionsGrid.RowDefinitions[1].Height = new GridLength(option ? 1 : 0, GridUnitType.Star);
+            cFunctionsGrid.RowDefinitions[2].Height = new GridLength(option ? 30 : 0);
+            cFunctionsGrid.RowDefinitions[3].Height = new GridLength(option ? 0 : 1, GridUnitType.Star);
+            }
         #endregion
         #region Menu Actions
         //_____________________________________________________________________________________________________________________________________________________________
@@ -519,8 +521,7 @@ namespace IseAddons {
             string caretLineText = editor.CaretLineText;
             string currentFile = hostObject.CurrentPowerShellTab.Files.SelectedFile.FullPath;
             Tuple<string, int, int> pos = new Tuple<string, int, int>(currentFile, editor.CaretLine, editor.CaretColumn);
-            Collection<PSParseError> errors = new Collection<PSParseError>();
-            List<PSToken> list = PSParser.Tokenize(caretLineText, out errors).Where(t => t.Type == PSTokenType.Command && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
+            List<PSToken> list = PSParser.Tokenize(caretLineText, out Collection<PSParseError> errors).Where(t => t.Type == PSTokenType.Command && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
             if (list.Count == 0) list = PSParser.Tokenize(caretLineText, out errors).Where(t => t.Type == PSTokenType.CommandParameter && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
             if (list.Count == 0) list = PSParser.Tokenize(caretLineText, out errors).Where(t => t.Type == PSTokenType.CommandArgument && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
             if (list.Count == 0) list = PSParser.Tokenize(caretLineText, out errors).Where(t => t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
@@ -563,8 +564,7 @@ namespace IseAddons {
                 string currentFile = hostObject.CurrentPowerShellTab.Files.SelectedFile.FullPath;
                 string caretLineText = editor.CaretLineText;
                 Tuple<string, int, int> pos = new Tuple<string, int, int>(currentFile, editor.CaretLine, editor.CaretColumn);
-                Collection<PSParseError> errors = new Collection<PSParseError>();
-                List<PSToken> list = PSParser.Tokenize(caretLineText, out errors).Where(t => (t.Type == PSTokenType.Command || t.Type == PSTokenType.Member) && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
+                List<PSToken> list = PSParser.Tokenize(caretLineText, out Collection<PSParseError> errors).Where(t => (t.Type == PSTokenType.Command || t.Type == PSTokenType.Member) && t.StartColumn <= editor.CaretColumn && t.EndColumn >= editor.CaretColumn).ToList();
 
                 List<cFunction> functions = mProjects.Project.Functions.GetFunctionByFileAndName(currentFile, list[0].Content);
                 if (functions.Count == 0) functions = mProjects.Project.Functions.GetFunctionByName(list[0].Content);
